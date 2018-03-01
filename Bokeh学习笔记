@@ -1,0 +1,92 @@
+
+# 绘图接口
+Bokeh的使用接口一共有三种：
+* bokeh.plotting 说是“mid level”，这个比较常用
+* bokeh.models “low level”，比较底层的接口，需要自己定义所有的部件（域范围、轴、线、标记符、图，等等），再拼在一起，适合需要细节控制的情况。
+* bokeh.charts 那就是“high level”喽，貌似没有实现，没有看到文档和代码。
+
+# Bokeh绘图中的几个重要元素和概念
+* Axis 轴：ticker 轴标
+* Range 域范围
+* Grid 网格线：grid_line，minor_grid_line，band
+* Legant 图例
+* Annotation 注释
+* Glyph 标记符
+* Layout 布局：Box，Column，Row，Spacer（空的占位），WidgetBox
+有2个要注意的地方：
+1. 所有的plots/widgets要有同样的“sizing mode”
+1. widgets要放在WidgetBox里
+* LayoutProvider：`StaticLayoutProvider`（笛卡尔空间） 这个是网状图专有的？
+* GraphRenderer 渲染器：node_renderer，edge_renderer
+* Figure 图
+* Plot ：gridplot可以排列多个 figure
+
+# 数据
+所有的一切都是为了数据的呈现，没有数据就没有一切。Bokeh 用的是`ColumnDataSource`（CDS）数据类型，所有的数据都会转成这个类型，自己手动显式的或者Bokeh自动帮你代劳。
+
+有意思的是从Pandas Groupby转过来，自动有了一些`mean`、`count`等列名。
+
+另外，`ColumnDataSource`还支持Streaming和Patching操作
+* Streaming append new data to CDS
+* Patching: update slices of CDS
+
+## Filter操作
+###IndexFilter
+直接给出CDS index 序列
+```
+source = ColumnDataSource(data=dict(x=[1, 2, 3, 4, 5], y=[1, 2, 3, 4, 5]))
+view = CDSView(source=source, filters=[IndexFilter([0, 2, 4])])
+```
+### BooleanFilter
+给出一个布尔序列
+```
+source = ColumnDataSource(data=dict(x=[1, 2, 3, 4, 5], y=[1, 2, 3, 4, 5]))
+booleans = [True if y_val > 2 else False for y_val in source.data['y']]
+view = CDSView(source=source, filters=[BooleanFilter(booleans)])
+```
+### GroupFilter
+有2个参数，column_name是CDS的列名，group是该列中存在的某个值。
+
+下例中，`species`是flowers数据的一个列名，其中包含数值*setosa*, *versicolor* 和 *virginica*，这里希望找出数值为`versicolor`的数据。
+```
+from bokeh.sampledata.iris import flowers
+source = ColumnDataSource(flowers)
+view = CDSView(source=source, filters=[GroupFilter(column_name='species', group='versicolor')])
+```
+### CustomJSFilter
+支持自己手写 JavaScript 和CoffeeScript 代码，必须返回index list 或者 boolean list。
+```
+custom_filter = CustomJSFilter(code='''
+var indices = [];
+
+// iterate through rows of data source and see if each satisfies some constraint
+for (var i = 0; i <= source.get_length(); i++){
+    if (source.data['some_column'][i] == 'some_value'){
+        indices.push(true);
+    } else {
+        indices.push(false);
+    }
+}
+return indices;
+''')
+```
+```
+custom_filter_coffee = CustomJSFilter.from_coffeescript(code='''
+z = source.data['z']
+indices = (i for i in [0...source.get_length()] when z[i] == 'b')
+return indices
+''')
+```
+## 关联的数据
+如果多个图共享同一个source数据源，选择某图中的某些数据点（框选，套索，悬浮 都有效），其它图中对应的数据点也会被选择。
+```
+# create a new plot and add a renderer
+left = figure(tools=TOOLS, plot_width=300, plot_height=300, title=None)
+left.circle('x', 'y0', size=10, hover_color="firebrick", source=source)
+
+# create another new plot, add a renderer that uses the view of the data source
+right = figure(tools=TOOLS, plot_width=300, plot_height=300, title=None)
+right.circle('x', 'y1', size=10, hover_color="firebrick", source=source, view=view)
+
+p = gridplot([[left, right]])
+```
