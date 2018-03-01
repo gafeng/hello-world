@@ -90,3 +90,55 @@ right.circle('x', 'y1', size=10, hover_color="firebrick", source=source, view=vi
 
 p = gridplot([[left, right]])
 ```
+
+# 绘图技巧
+
+## 分组的柱状图
+* Nested Categories
+
+把数据排排整齐
+```
+# this creates [ ("Apples", "2015"), ("Apples", "2016"), ("Apples", "2017"), ("Pears", "2015), ... ]
+x = [ (fruit, year) for fruit in fruits for year in years ]
+counts = sum(zip(data['2015'], data['2016'], data['2017']), ()) # like an hstack
+
+source = ColumnDataSource(data=dict(x=x, counts=counts))
+
+p.vbar(x='x', top='counts', width=0.9, source=source)
+```
+
+* Visual Dodge
+
+数据就不管了，分开几次画条柱，每次用不同的偏移。等于是先画2015年的柱子，再画2016年的柱子...
+```
+p.vbar(x=dodge('fruits', -0.25, range=p.x_range), top='2015', width=0.2, source=source,
+       color="#c9d9d3", legend=value("2015"))
+
+p.vbar(x=dodge('fruits',  0.0,  range=p.x_range), top='2016', width=0.2, source=source,
+       color="#718dbf", legend=value("2016"))
+
+p.vbar(x=dodge('fruits',  0.25, range=p.x_range), top='2017', width=0.2, source=source,
+       color="#e84d60", legend=value("2017"))
+```
+
+* Stacked
+
+有专门的 `hbar_stack()` `vbar_stack()` 函数调用。不过据说也是和dodge一样，挨个画柱子。
+```
+p.vbar_stack(years, x='fruits', width=0.9, color=colors, source=source,
+             legend=[value(x) for x in years])
+```
+
+* Pandas Groupby
+终极大杀器
+```
+group = df.groupby(('cyl', 'mfr'))
+source = ColumnDataSource(group)
+
+p.vbar(x='cyl_mfr', top='mpg_mean', width=1, source=source, line_color="white", fill_color=index_cmap)
+```
+
+下面这两个还挺复杂，后面再看。
+
+* Categorical Offsets
+* Heat Maps
